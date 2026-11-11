@@ -1,0 +1,28 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir proyecto (si subiste ember-project.zip)
+        run: if [ -f ember-project.zip ]; then unzip -oq ember-project.zip; fi
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.9" }
+      - name: Descargar Ruffle (web autoalojado)
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          TAG=$(gh release list --repo ruffle-rs/ruffle --limit 1 --json tagName -q '.[0].tagName')
+          mkdir -p /tmp/r app/src/main/assets/ruffle
+          gh release download "$TAG" --repo ruffle-rs/ruffle --pattern '*web-selfhosted.zip' --dir /tmp/r
+          unzip -oq /tmp/r/*.zip -d app/src/main/assets/ruffle
+          ls app/src/main/assets/ruffle | head
+          test -f app/src/main/assets/ruffle/ruffle.js
+      - run: gradle :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with: { name: ember-debug-apk, path: app/build/outputs/apk/debug/app-debug.apk }
